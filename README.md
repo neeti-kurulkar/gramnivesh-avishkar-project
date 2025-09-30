@@ -46,7 +46,7 @@ Data is structured in Excel files and organized by administrative level:
 
 | Level | Filename Format | Description |
 |-------|----------------|-------------|
-| Country | `02_states.xlsx` | Contains national-level fund allocations and releases for the country |
+| Country | `01_states.xlsx` | Contains national-level fund allocations and releases for the country |
 | State | `02_<state_name>_districts.xlsx` | Contains district-level fund allocations for the state |
 | District | `03_<district_name>_blocks.xlsx` | Contains block-level fund allocations for the district |
 | Block | `04_<block_name>_panchayats.xlsx` | Contains panchayat-level fund allocations for the block |
