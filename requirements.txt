@@ -1,0 +1,9 @@
+psycopg2-binary
+pandas
+openpyxl
+python-dotenv
+langgraph
+langchain
+langchain-community
+langchain-groq
+streamlit
