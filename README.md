@@ -82,20 +82,21 @@ venv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
-4. **Set up PostgreSQL database** and create a `.env` file with credentials:  
+4. **Set up PostgreSQL database** and create a `.env` file with credentials and Groq API key:  
 ```
 DB_HOST=<host>
 DB_PORT=<port>
 DB_NAME=<database_name>
 DB_USER=<username>
 DB_PASS=<password>
+GROQ_API_KEY=<your_groq_api_key>
 ```
 
 5. **Prepare Excel files** in the `excel/` folder as per the data structure above.
 
 6. **Populate the database**  
 ```bash
-python db/load_data.py
+python db/setup.py
 ```
 
 ---
@@ -156,4 +157,4 @@ pmayg-dashboard/
 
 ## Acknowledgements
 - Data Source: [Ministry of Rural Development, India](https://rhreporting.nic.in/netiay/FinancialProgressReport/Report_HighLevel_FinancialProgress.aspx)  
-- Built using: Python, Streamlit, Pandas, PostgreSQL
+- Built using: Python, Streamlit, Pandas, PostgreSQL, LangGraph, Groq
