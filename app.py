@@ -4,6 +4,7 @@ import pandas as pd
 import psycopg2
 import os
 from dotenv import load_dotenv
+import plotly.express as px
 
 from langgraph.graph import StateGraph, END
 from utils.state import State
@@ -11,6 +12,7 @@ from agents.text_to_sql import text_to_sql_agent
 from agents.query_executor import query_executor_agent
 from agents.insight_generator import insights_agent
 from agents.summary_agent import company_summary_agent
+from agents.visualization_agent import visualization_agent  # new
 
 load_dotenv()  # Load DB credentials
 
@@ -22,29 +24,26 @@ DB_PARAMS = {
     "password": os.getenv("PGPASSWORD")
 }
 
-def query_db(query):
-    """Run a query on PostgreSQL and return as DataFrame."""
-    conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        df = pd.read_sql_query(query, conn)
-    finally:
-        conn.close()
-    return df
-
 # ---------------- Streamlit Page Setup ----------------
 st.set_page_config(page_title="PMAY-G Insights Dashboard", layout="wide", page_icon="🏘️")
 
+# ---------------- State Graph Setup ----------------
 graph = StateGraph(State)
 graph.add_node("text_to_sql", text_to_sql_agent)
 graph.add_node("query_executor", query_executor_agent)
 graph.add_node("insights", insights_agent)
+graph.add_node("visualization", visualization_agent)  # new node
 graph.set_entry_point("text_to_sql")
+
+# Edges
 graph.add_edge("text_to_sql", "query_executor")
 graph.add_edge("query_executor", "insights")
+graph.add_edge("query_executor", "visualization")  # query result flows to visualization
 graph.add_edge("insights", END)
+graph.add_edge("visualization", END)
 app = graph.compile()
 
-# Sidebar navigation
+# ---------------- Sidebar ----------------
 st.sidebar.title("PMAY-G Insights")
 page = st.sidebar.radio("Navigate to", ["Home", "Ask a Question", "View Data"], index=0)
 
@@ -52,9 +51,7 @@ page = st.sidebar.radio("Navigate to", ["Home", "Ask a Question", "View Data"], 
 if page == "Home":
     st.title("🏠 PMAY-G Insights Dashboard")
     st.markdown("### Pradhan Mantri Awaas Yojana - Gramin (PMAY-G)")
-    
-    # ---------------- Key Stats / Highlights ----------------
-    st.markdown("#### Key Objectives & Features")
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
@@ -73,7 +70,6 @@ if page == "Home":
         - Aligns with other flagship programs (Swachh Bharat, Ujjwala, Saubhagya)
         """)
 
-    # ---------------- Implementation Framework ----------------
     st.markdown("#### Implementation Framework")
     st.info("""
     - Beneficiaries construct houses with trained masons  
@@ -82,7 +78,6 @@ if page == "Home":
     - Central Government provides financial assistance & policy guidance
     """)
 
-    # ---------------- Achievements & Challenges ----------------
     st.markdown("#### Achievements & Progress")
     st.metric("Target Houses by 2024", "2.95 Crore")
     st.markdown("- Significant progress achieved across multiple states\n- Many rural households now have safe housing")
@@ -94,7 +89,6 @@ if page == "Home":
     - Continuous monitoring for quality assurance
     """)
 
-    # ---------------- Project Purpose ----------------
     st.markdown("#### About This Dashboard")
     st.success("""
     This dashboard allows you to explore **fund allocations, utilization, and beneficiary distributions** across
@@ -106,7 +100,7 @@ if page == "Home":
 elif page == "Ask a Question":
     st.title("💬 Ask a PMAY-G Question")
 
-    # ---------------- Company Summary ----------------
+    # Company Summary
     if "company_summary" not in st.session_state:
         with st.spinner("Generating PMAY-G summary..."):
             summary_output = company_summary_agent({})
@@ -117,7 +111,7 @@ elif page == "Ask a Question":
     st.subheader("🏢 PMAY-G Overview")
     st.info(summary_output["summary"])
 
-    # ---------------- Example Questions ----------------
+    # Example Questions
     with st.expander("💡 Example Questions"):
         st.markdown("""
         - What is the total allocation versus total released funds in Maharashtra?  
@@ -126,24 +120,23 @@ elif page == "Ask a Question":
         - Show allocations for all beneficiary categories in Khed block.  
         """)
 
-    # ---------------- User Query Input ----------------
+    # User Query Input
     user_query = st.text_input(
         "Enter your question here",
         value=st.session_state.get("user_query", "")
     )
 
-    # ---------------- Submit Button ----------------
     if st.button("Submit") and user_query:
-        st.session_state.user_query = user_query  # store query
-        with st.spinner("Generating SQL and Insights..."):
+        st.session_state.user_query = user_query
+        with st.spinner("Generating SQL, Insights, and Visualizations..."):
             output = app.invoke({"messages": [user_query]})
-            st.session_state.query_output = output  # store output
+            st.session_state.query_output = output
 
-    # ---------------- Display Query Output ----------------
+    # Display Output
     if "query_output" in st.session_state:
         output = st.session_state.query_output
 
-        tabs = st.tabs(["Insights", "Generated SQL Query", "Query Result"])
+        tabs = st.tabs(["Insights", "Generated SQL Query", "Query Result", "Visualization"])
 
         # SQL Query
         with tabs[1]:
@@ -155,8 +148,7 @@ elif page == "Ask a Question":
             st.subheader("Query Result")
             result = output.get("query_result", None)
             if isinstance(result, list) and result:
-                df = pd.DataFrame(result)
-                df.fillna(0, inplace=True)
+                df = pd.DataFrame(result).fillna(0)
                 st.dataframe(df)
             elif isinstance(result, pd.DataFrame):
                 df = result.fillna(0)
@@ -168,17 +160,23 @@ elif page == "Ask a Question":
         with tabs[0]:
             st.subheader("Insights")
             insights_text = output.get("insights", "No insights generated.")
-            # clean formatting for readability
             insights_text = re.sub(r'\n+', '\n', insights_text)
             insights_text = re.sub(r'\s+\n', '\n', insights_text)
             insights_text = insights_text.strip()
             st.success(insights_text)
 
+        # Visualization
+        with tabs[3]:
+            fig = output.get("visualization", None)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No visualization available for this query.")
+
 # ---------------- View Data Page ----------------
 elif page == "View Data":
     st.title("📊 View PMAY-G Excel Sheets")
 
-    # Map table names to Excel files
     excel_files = {
         "pmayg_state": "01_states.xlsx",
         "pmayg_district": "02_maharashtra_districts.xlsx",
@@ -189,10 +187,6 @@ elif page == "View Data":
     table_name = st.selectbox("Select table to view", list(excel_files.keys()))
 
     if table_name:
-        import os
-        import pandas as pd
-
-        # Construct path
         PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
         EXCEL_FOLDER = os.path.join(PROJECT_ROOT, "db", "excel")
         file_name = excel_files[table_name]
@@ -200,7 +194,7 @@ elif page == "View Data":
 
         if os.path.exists(file_path):
             df = pd.read_excel(file_path)
-            df.columns = [str(c).strip() for c in df.columns]  # clean column names
+            df.columns = [str(c).strip() for c in df.columns]
             st.dataframe(df)
         else:
             st.warning(f"Excel file for {table_name} not found at {file_path}")
